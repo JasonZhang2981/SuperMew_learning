@@ -1450,6 +1450,64 @@ span.cite-ref:hover {
     margin-left: 2px;
 }
 
+/* 子 Agent 步骤分组 */
+.step-group {
+    margin: 2px 0;
+}
+
+.step-group-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: 6px;
+    transition: background 0.2s ease;
+    user-select: none;
+}
+
+.step-group-header:hover {
+    background: rgba(0, 0, 0, 0.04);
+}
+
+.step-group-arrow {
+    font-size: 0.65rem;
+    color: var(--primary-color);
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.step-group-arrow.collapsed {
+    transform: rotate(0deg);
+}
+
+.step-group-arrow:not(.collapsed) {
+    transform: rotate(90deg);
+}
+
+.step-group-label {
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 260px;
+}
+
+.step-group-count {
+    font-size: 0.72rem;
+    color: var(--text-light);
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.step-group-body {
+    padding-left: 16px;
+    border-left: 2px solid var(--primary-light, #ffb7b2);
+    margin-left: 8px;
+}
+
 /* Real-time RAG steps */
 .rag-steps-live {
     margin-top: 6px;

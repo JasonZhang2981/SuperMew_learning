@@ -273,11 +273,31 @@
                             <span v-else class="thinking-text">{{ msg.ragSteps[msg.ragSteps.length - 1].label }}</span>
                         </div>
                         <div v-if="msg.ragSteps && msg.ragSteps.length" class="thinking-trace-lines">
-                            <div v-for="(step, sIdx) in msg.ragSteps" :key="sIdx" class="thinking-trace-line">
-                                <span class="thinking-trace-icon">{{ step.icon || '▶' }}</span>
-                                <span class="thinking-trace-label">{{ step.label }}</span>
-                                <span v-if="step.detail" class="thinking-trace-detail">{{ step.detail }}</span>
-                            </div>
+                            <template v-for="(grp, gIdx) in msg._groupedSteps" :key="grp.group || `main-${gIdx}`">
+                                <!-- 子 Agent 分组：带标题可折叠 -->
+                                <div v-if="grp.group" class="step-group">
+                                    <div class="step-group-header" @click="toggleStepGroup(index, gIdx)">
+                                        <span class="step-group-arrow" :class="{ collapsed: grp.collapsed }">▶</span>
+                                        <span class="step-group-label">🧵 子问题：{{ grp.label }}</span>
+                                        <span class="step-group-count">{{ grp.steps.length }} 步</span>
+                                    </div>
+                                    <div v-show="!grp.collapsed" class="step-group-body">
+                                        <div v-for="(step, sIdx) in grp.steps" :key="sIdx" class="thinking-trace-line">
+                                            <span class="thinking-trace-icon">{{ step.icon || '▶' }}</span>
+                                            <span class="thinking-trace-label">{{ step.label }}</span>
+                                            <span v-if="step.detail" class="thinking-trace-detail">{{ step.detail }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- 普通步骤：直接展示 -->
+                                <template v-else>
+                                    <div v-for="(step, sIdx) in grp.steps" :key="'s' + gIdx + '-' + sIdx" class="thinking-trace-line">
+                                        <span class="thinking-trace-icon">{{ step.icon || '▶' }}</span>
+                                        <span class="thinking-trace-label">{{ step.label }}</span>
+                                        <span v-if="step.detail" class="thinking-trace-detail">{{ step.detail }}</span>
+                                    </div>
+                                </template>
+                            </template>
                         </div>
                     </div>
                     <!-- 正常回复内容 -->

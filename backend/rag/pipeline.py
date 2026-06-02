@@ -14,7 +14,7 @@ from backend.rag.utils import (
     retrieval_trace_fields,
     merge_retrieval_trace,
 )
-from backend.chat.streaming import emit_rag_step
+from backend.chat.streaming import emit_rag_step, set_sub_agent_group, clear_sub_agent_group
 
 API_KEY = os.getenv("ARK_API_KEY")
 MODEL = os.getenv("MODEL")
@@ -580,10 +580,16 @@ _rag_sub_agent_graph = build_rag_sub_agent_graph()
 
 def rag_sub_agent(state: RAGState) -> RAGState:
     """包装子图，将子图结果封装为 sub_results 以便主图通过 reducer 合并。"""
-    result = _rag_sub_agent_graph.invoke(state)
+    question = state.get("question", "")
+    # 设置子 Agent 分组标识，使子图内所有 emit_rag_step 自动携带 group
+    set_sub_agent_group(question)
+    try:
+        result = _rag_sub_agent_graph.invoke(state)
+    finally:
+        clear_sub_agent_group()
     return {
         "sub_results": [{
-            "question": state.get("question", ""),
+            "question": question,
             "docs": result.get("docs", []),
             "rag_trace": result.get("rag_trace"),
         }],

@@ -126,6 +126,51 @@ createApp({
             return div.innerHTML;
         },
 
+        /**
+         * 将单条 rag step 追加到分组列表。
+         * 具名 group（子 Agent）：按 group id 合并，支持并行交错到达。
+         * 无 group（主流程）：仅追加到最后一个无 group 分组，保留前后两段主流程步骤分离。
+         */
+        appendRagStepToGroups(prev, step) {
+            const groups = prev || [];
+            const g = step.group || null;
+            if (g) {
+                const idx = groups.findIndex(grp => grp.group === g);
+                if (idx >= 0) {
+                    const existing = groups[idx];
+                    const updated = {
+                        group: existing.group,
+                        label: existing.label,
+                        steps: [...existing.steps, step],
+                        collapsed: existing.collapsed,
+                    };
+                    return [...groups.slice(0, idx), updated, ...groups.slice(idx + 1)];
+                }
+                return [...groups, { group: g, label: g, steps: [step], collapsed: true }];
+            }
+            const last = groups.length > 0 ? groups[groups.length - 1] : null;
+            if (last && last.group === null) {
+                const updated = { ...last, steps: [...last.steps, step] };
+                return [...groups.slice(0, -1), updated];
+            }
+            return [...groups, { group: null, label: null, steps: [step], collapsed: false }];
+        },
+
+        /**
+         * 将 ragSteps 按 group 字段分组（仅用于历史会话加载等一次性场景）。
+         * 返回 [{ group: string|null, label: string, steps: [], collapsed: bool }]
+         */
+        groupRagSteps(steps) {
+            if (!steps || !steps.length) return [];
+            return steps.reduce((groups, step) => this.appendRagStepToGroups(groups, step), []);
+        },
+
+        toggleStepGroup(msgIndex, groupIndex) {
+            const msg = this.messages[msgIndex];
+            if (!msg || !msg._groupedSteps || !msg._groupedSteps[groupIndex]) return;
+            msg._groupedSteps[groupIndex].collapsed = !msg._groupedSteps[groupIndex].collapsed;
+        },
+
         formatCandidateKLabel(trace) {
             if (!trace || trace.candidate_k == null) {
                 return '';
@@ -298,7 +343,8 @@ createApp({
                 isUser: false,
                 isThinking: true,
                 ragTrace: null,
-                ragSteps: []
+                ragSteps: [],
+                _groupedSteps: []
             });
             const botMsgIdx = this.messages.length - 1;
 
@@ -345,10 +391,10 @@ createApp({
                                 } else if (data.type === 'trace') {
                                     this.messages[botMsgIdx].ragTrace = data.rag_trace;
                                 } else if (data.type === 'rag_step') {
-                                    if (!this.messages[botMsgIdx].ragSteps) {
-                                        this.messages[botMsgIdx].ragSteps = [];
-                                    }
-                                    this.messages[botMsgIdx].ragSteps.push(data.step);
+                                    const msg = this.messages[botMsgIdx];
+                                    if (!msg.ragSteps) msg.ragSteps = [];
+                                    msg.ragSteps.push(data.step);
+                                    msg._groupedSteps = this.appendRagStepToGroups(msg._groupedSteps, data.step);
                                 } else if (data.type === 'session_title') {
                                     const s = this.sessions.find(
                                         item => item.session_id === data.session_id
