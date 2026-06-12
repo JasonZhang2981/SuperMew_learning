@@ -54,7 +54,7 @@ def _generate_session_title_sync(user_text: str) -> str:
             "请根据用户的首次提问，生成一个简短的对话标题（控制在 10 个字以内，不要标点）。\n"
             f"用户提问：{user_text}"
         )
-        res = fast_model.invoke([SystemMessage(content=prompt)])
+        res = fast_model.invoke([HumanMessage(content=prompt)])
         title = (res.content or "").strip().strip('"').strip("。")
         return title or "新会话"
     except Exception as e:
@@ -80,7 +80,7 @@ def _update_persistent_note_sync(current_note: str, user_text: str, ai_response:
             f"▼ 最新一轮对话：\n用户：{user_text}\nAI：{ai_response}\n\n"
             "请直接输出更新后的笔记（纯文本，不要解释或 Markdown 代码块）："
         )
-        res = fast_model.invoke([SystemMessage(content=prompt)])
+        res = fast_model.invoke([HumanMessage(content=prompt)])
         return (res.content or "").strip()
     except Exception as e:
         print(f"Context Manager Error: {e}")
