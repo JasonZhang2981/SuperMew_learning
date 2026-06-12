@@ -10,7 +10,7 @@ from backend.api.resources import (
     milvus_manager,
     milvus_writer,
     parent_chunk_store,
-    remove_bm25_stats_for_filename,
+    delete_document_transactionally,
     save_upload_file,
 )
 from backend.db.models import User
@@ -37,20 +37,7 @@ def _process_upload_job(job_id: str, file_path: str, filename: str) -> None:
 
         failed_step = "cleanup"
         upload_job_manager.update_step(job_id, "cleanup", 10, "running", "正在清理同名旧文档")
-        milvus_manager.init_collection()
-        delete_expr = f'filename == "{filename}"'
-        try:
-            remove_bm25_stats_for_filename(filename)
-        except Exception:
-            pass
-        try:
-            milvus_manager.delete(delete_expr)
-        except Exception:
-            pass
-        try:
-            parent_chunk_store.delete_by_filename(filename)
-        except Exception:
-            pass
+        delete_document_transactionally(filename)
         upload_job_manager.complete_step(job_id, "cleanup", "旧版本清理完成")
 
         failed_step = "parse"
@@ -108,31 +95,12 @@ def _process_upload_job(job_id: str, file_path: str, filename: str) -> None:
 def _process_delete_job(job_id: str, filename: str) -> None:
     failed_step = "prepare"
     try:
-        failed_step = "prepare"
-        delete_job_manager.update_step(job_id, "prepare", 20, "running", "正在初始化 Milvus 集合")
-        milvus_manager.init_collection()
-        delete_expr = f'filename == "{filename}"'
-        delete_job_manager.complete_step(job_id, "prepare", "删除任务已创建")
-
-        failed_step = "bm25"
-        delete_job_manager.update_step(job_id, "bm25", 20, "running", "正在同步 BM25 统计")
-        remove_bm25_stats_for_filename(filename)
-        delete_job_manager.complete_step(job_id, "bm25", "BM25 统计已同步")
-
-        failed_step = "milvus"
-        delete_job_manager.update_step(job_id, "milvus", 30, "running", "正在删除 Milvus 向量数据")
-        result = milvus_manager.delete(delete_expr)
-        deleted_count = result.get("delete_count", 0) if isinstance(result, dict) else 0
-        delete_job_manager.complete_step(job_id, "milvus", f"向量数据已删除：{deleted_count} 条")
-
-        failed_step = "parent_store"
-        delete_job_manager.update_step(job_id, "parent_store", 30, "running", "正在删除 PostgreSQL 父级分块")
-        parent_chunk_store.delete_by_filename(filename)
-        delete_job_manager.complete_step(job_id, "parent_store", "父级分块已删除")
-
-        delete_job_manager.complete_job(job_id, f"已删除 {filename}，向量数据 {deleted_count} 条")
+        chunks_deleted = delete_document_transactionally(filename, delete_job_manager, job_id)
+        delete_job_manager.complete_job(job_id, f"已删除 {filename}，向量数据 {chunks_deleted} 条")
     except Exception as e:
-        delete_job_manager.fail_job(job_id, failed_step, str(e))
+        job = delete_job_manager.get_job(job_id)
+        current_step = job.get("current_step", "prepare") if job else "prepare"
+        delete_job_manager.fail_job(job_id, current_step, str(e))
 
 
 @router.get("/documents", response_model=DocumentListResponse)
@@ -249,21 +217,9 @@ async def upload_document(file: UploadFile = File(...), _: User = Depends(requir
             raise HTTPException(status_code=400, detail="仅支持 PDF、Word 和 Excel 文档")
 
         ensure_upload_dir()
-        milvus_manager.init_collection()
-
-        delete_expr = f'filename == "{filename}"'
-        try:
-            remove_bm25_stats_for_filename(filename)
-        except Exception:
-            pass
-        try:
-            milvus_manager.delete(delete_expr)
-        except Exception:
-            pass
-        try:
-            parent_chunk_store.delete_by_filename(filename)
-        except Exception:
-            pass
+        
+        # Cleanup existing同名文档以保证一致性
+        delete_document_transactionally(filename)
 
         file_path = UPLOAD_DIR / filename
         with open(file_path, "wb") as f:
@@ -303,15 +259,11 @@ async def upload_document(file: UploadFile = File(...), _: User = Depends(requir
 @router.delete("/documents/{filename}", response_model=DocumentDeleteResponse)
 async def delete_document(filename: str, _: User = Depends(require_admin)):
     try:
-        milvus_manager.init_collection()
-        delete_expr = f'filename == "{filename}"'
-        remove_bm25_stats_for_filename(filename)
-        result = milvus_manager.delete(delete_expr)
-        parent_chunk_store.delete_by_filename(filename)
+        chunks_deleted = delete_document_transactionally(filename)
 
         return DocumentDeleteResponse(
             filename=filename,
-            chunks_deleted=result.get("delete_count", 0) if isinstance(result, dict) else 0,
+            chunks_deleted=chunks_deleted,
             message=f"成功删除文档 {filename} 的向量数据（本地文件已保留）",
         )
     except Exception as e:
