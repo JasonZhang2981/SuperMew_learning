@@ -2,6 +2,8 @@
 
 本文档用于快速学习并上手 `SuperMew_learning` 项目。路线设计目标是：先跑通，再读懂主链路，再深入 RAG 和 Agent，最后通过小改动完成实践闭环。
 
+如果你希望从小白视角逐步拆解源码调用链，先读独立指导书：[Agentic RAG Code Study Guide](agentic-rag-code-study-guide.md)。
+
 ## 1. 项目定位
 
 `SuperMew_learning` 是一个完整的 Agent + RAG 应用项目，核心形态是：
